@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Drinderr WebApp</title>
     
-    <!-- Подключаем только Telegram SDK, он легкий и встроен в сам мессенджер -->
+    <!-- Telegram SDK встроен прямо в мессенджер -->
     <script src="https://telegram.org"></script>
     
     <style>
@@ -22,12 +22,21 @@
             overflow: hidden;
         }
         
-        /* Интерактивная карта во весь экран */
-        #map-frame {
+        /* Контейнер для статической карты */
+        #map-container {
             width: 100%;
             height: calc(100vh - 80px);
-            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             background-color: #2b2b2b;
+            overflow: hidden;
+        }
+
+        #static-map {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
         }
         
         .controls {
@@ -66,8 +75,10 @@
 </head>
 <body>
 
-    <!-- Встраиваем карту напрямую без тяжелых JS библиотек -->
-    <iframe id="map-frame" src="https://openstreetmap.org"></iframe>
+    <!-- Карта в виде статической картинки Яндекс, которая никогда не заблокируется -->
+    <div id="map-container">
+        <img id="static-map" src="https://yandex.ru" alt="Карта">
+    </div>
 
     <div class="controls">
         <button class="beer" onclick="sendCheckin('Пиво 🍻')">🍻 Пиво</button>
@@ -86,7 +97,7 @@
         // Координаты по умолчанию (Москва)
         let userCoords = { lat: 55.7558, lng: 37.6173 };
 
-        // Запрашиваем реальный GPS смартфона для отправки другу
+        // Запрашиваем реальный GPS смартфона
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition((position) => {
                 userCoords = {
@@ -94,17 +105,10 @@
                     lng: position.coords.longitude
                 };
                 
-                // Пересчитываем границы карты iframe под локацию пользователя
-                const offset = 0.01; 
-                const minLon = userCoords.lng - offset;
-                const minLat = userCoords.lat - offset;
-                const maxLon = userCoords.lng + offset;
-                const maxLat = userCoords.lat + offset;
-                
-                // Обновляем карту на экране под ваши реальные координаты
-                document.getElementById('map-frame').src = `https://openstreetmap.org{minLon}%2C${minLat}%2C${maxLon}%2C${maxLat}&layer=mapnik&marker=${userCoords.lat}%2C${userCoords.lng}`;
+                // Переключаем Яндекс Карту на реальные координаты пользователя и ставим маркер (pm2blm)
+                document.getElementById('static-map').src = `https://yandex.ru{userCoords.lng},${userCoords.lat}&z=15&l=map&size=450,450&pt=${userCoords.lng},${userCoords.lat},pm2blm`;
             }, (error) => {
-                console.log("GPS недоступен, показываем дефолтную карту");
+                console.log("GPS недоступен, осталась дефолтная карта");
             }, { enableHighAccuracy: true });
         }
 
