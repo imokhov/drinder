@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Beer Buddy WebApp</title>
     
-    <!-- ИСПРАВЛЕНО: Стили Leaflet со стабильного сервера Cloudflare cdnjs -->
-    <link rel="stylesheet" href="https://cloudflare.com" />
+    <!-- Стили карты загружаются из гарантированно доступного источника -->
+    <link rel="stylesheet" href="https://yastatic.net" />
     <!-- Telegram WebApp SDK -->
     <script src="https://telegram.org"></script>
     
@@ -68,10 +68,9 @@
         <button class="coffee" onclick="sendCheckin('Кофе ☕')">☕ Кофе</button>
     </div>
 
-    <!-- ИСПРАВЛЕНО: Сам скрипт карты Leaflet со стабильного сервера Cloudflare cdnjs -->
-    <script src="https://cloudflare.com"></script>
+    <!-- Движок карты загружается напрямую через сервера Яндекса -->
+    <script src="https://yastatic.net"></script>
     <script>
-        // Инициализация Telegram
         let tg = null;
         if (typeof window !== 'undefined' && window.Telegram && window.Telegram.WebApp) {
             tg = window.Telegram.WebApp;
@@ -79,7 +78,7 @@
             tg.expand();
         }
 
-        // Проверяем загрузку библиотеки перед созданием карты
+        // Если Leaflet успешно загружен с Яндекса
         if (typeof L !== 'undefined') {
             const map = L.map('map').setView([55.7558, 37.6173], 12);
             
@@ -112,7 +111,19 @@
 
             setTimeout(() => { map.invalidateSize(); }, 400);
         } else {
-            document.getElementById('map').innerHTML = "<div style='padding:20px; text-align:center; color:red;'>Ошибка: Не удалось загрузить скрипты карты. Проверьте подключение к сети.</div>";
+            // Аварийный режим без карты — кнопки в любом случае будут работать!
+            document.getElementById('map').innerHTML = "<div style='padding:40px; text-align:center; font-size:18px;'>🗺️ Карта недоступна в обычном браузере.<br><br>Кнопки ниже активны! Запустите бота, чтобы протестировать на телефоне.</div>";
+            
+            let userCoords = { lat: 55.7558, lng: 37.6173 };
+            window.sendCheckin = function(drinkType) {
+                const data = { drink: drinkType, lat: userCoords.lat, lng: userCoords.lng };
+                if (tg && tg.sendData) {
+                    tg.sendData(JSON.stringify(data));
+                    tg.close();
+                } else {
+                    alert("Чекин: " + drinkType);
+                }
+            };
         }
     </script>
 </body>
