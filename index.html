@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Beer Buddy WebApp</title>
     
-    <!-- Стили карты загружаются из гарантированно доступного источника -->
-    <link rel="stylesheet" href="https://yastatic.net" />
+    <!-- Стабильные стили карты напрямую с UNPKG -->
+    <link rel="stylesheet" href="https://unpkg.com" crossorigin="" />
     <!-- Telegram WebApp SDK -->
     <script src="https://telegram.org"></script>
     
@@ -27,7 +27,7 @@
         #map {
             width: 100%;
             height: calc(100vh - 80px);
-            background-color: #e5e3df;
+            background-color: #2b2b2b; /* Темная заглушка */
         }
         
         .controls {
@@ -68,8 +68,8 @@
         <button class="coffee" onclick="sendCheckin('Кофе ☕')">☕ Кофе</button>
     </div>
 
-    <!-- Движок карты загружается напрямую через сервера Яндекса -->
-    <script src="https://yastatic.net"></script>
+    <!-- Сам движок карты напрямую с UNPKG -->
+    <script src="https://unpkg.com" crossorigin=""></script>
     <script>
         let tg = null;
         if (typeof window !== 'undefined' && window.Telegram && window.Telegram.WebApp) {
@@ -78,13 +78,14 @@
             tg.expand();
         }
 
-        // Если Leaflet успешно загружен с Яндекса
-        if (typeof L !== 'undefined') {
+        // Принудительно создаем карту в любом случае
+        try {
             const map = L.map('map').setView([55.7558, 37.6173], 12);
             
+            // Используем стандартные стабильные тайлы
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 maxZoom: 19,
-                attribution: '© OpenStreetMap'
+                attribution: '© OSM'
             }).addTo(map);
 
             let userCoords = { lat: 55.7558, lng: 37.6173 };
@@ -95,7 +96,7 @@
                     map.setView([userCoords.lat, userCoords.lng], 16);
                     L.marker([userCoords.lat, userCoords.lng]).addTo(map).bindPopup('Вы здесь 📍').openPopup();
                 }, (error) => {
-                    L.marker([userCoords.lat, userCoords.lng]).addTo(map).bindPopup('Дефолтная точка (GPS недоступен)').openPopup();
+                    L.marker([userCoords.lat, userCoords.lng]).addTo(map).bindPopup('GPS недоступен, включите геопозицию!').openPopup();
                 }, { enableHighAccuracy: true });
             }
 
@@ -105,25 +106,14 @@
                     tg.sendData(JSON.stringify(data));
                     tg.close();
                 } else {
-                    alert("Тест на ПК:\nЧекин: " + drinkType + "\nКоординаты: " + JSON.stringify(userCoords));
+                    alert("Чекин: " + drinkType);
                 }
             };
 
             setTimeout(() => { map.invalidateSize(); }, 400);
-        } else {
-            // Аварийный режим без карты — кнопки в любом случае будут работать!
-            document.getElementById('map').innerHTML = "<div style='padding:40px; text-align:center; font-size:18px;'>🗺️ Карта недоступна в обычном браузере.<br><br>Кнопки ниже активны! Запустите бота, чтобы протестировать на телефоне.</div>";
-            
-            let userCoords = { lat: 55.7558, lng: 37.6173 };
-            window.sendCheckin = function(drinkType) {
-                const data = { drink: drinkType, lat: userCoords.lat, lng: userCoords.lng };
-                if (tg && tg.sendData) {
-                    tg.sendData(JSON.stringify(data));
-                    tg.close();
-                } else {
-                    alert("Чекин: " + drinkType);
-                }
-            };
+
+        } catch (e) {
+            document.getElementById('map').innerHTML = "<div style='padding:40px; text-align:center;'>Ошибка инициализации карты. Попробуйте обновить страницу.</div>";
         }
     </script>
 </body>
