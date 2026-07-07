@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Drinderr WebApp</title>
     
-    <!-- ПРАВИЛЬНО: Стили карты OpenStreetMap (Leaflet) -->
-    <link rel="stylesheet" href="https://cloudflare.com" />
+    <!-- Стили OpenStreetMap берутся напрямую из репозитория unpkg -->
+    <link rel="stylesheet" href="https://unpkg.com" />
     
-    <!-- ПРАВИЛЬНО: Официальный скрипт Telegram WebApp -->
+    <!-- Telegram SDK встроен прямо в мессенджер -->
     <script src="https://telegram.org"></script>
     
     <style>
@@ -24,13 +24,11 @@
             flex-direction: column;
             overflow: hidden;
         }
-        
         #map {
             width: 100%;
             height: calc(100vh - 80px);
             background-color: #2b2b2b;
         }
-        
         .controls {
             height: 80px;
             padding: 15px;
@@ -41,7 +39,6 @@
             box-sizing: border-box;
             z-index: 1000;
         }
-        
         button {
             flex: 1;
             padding: 12px;
@@ -54,32 +51,23 @@
             align-items: center;
             justify-content: center;
             gap: 8px;
-            transition: transform 0.1s;
         }
-        
-        button:active {
-            transform: scale(0.97);
-        }
-
         button.beer { background: linear-gradient(135deg, #ffb703, #fb8500); color: #000; }
         button.coffee { background: linear-gradient(135deg, #219ebc, #023047); color: #fff; }
     </style>
 </head>
 <body>
 
-    <!-- Контейнер карты -->
     <div id="map"></div>
 
-    <!-- Панель с кнопками выпивки -->
     <div class="controls">
         <button class="beer" onclick="sendCheckin('Пиво 🍻')">🍻 Пиво</button>
         <button class="coffee" onclick="sendCheckin('Кофе ☕')">☕ Кофе</button>
     </div>
 
-    <!-- ПРАВИЛЬНО: Сам движок карты OpenStreetMap (Leaflet) -->
-    <script src="https://cloudflare.com"></script>
+    <!-- Движок карты подгружается строго с unpkg, без использования cloudflare cdnjs -->
+    <script src="https://unpkg.com"></script>
     <script>
-        // Инициализация Telegram
         let tg = null;
         if (typeof window !== 'undefined' && window.Telegram && window.Telegram.WebApp) {
             tg = window.Telegram.WebApp;
@@ -87,7 +75,7 @@
             tg.expand();
         }
 
-        // Базовые координаты (Москва), пока ищется GPS
+        // Создаем карту (Москва по умолчанию)
         const map = L.map('map').setView([55.7558, 37.6173], 12);
         
         // Подгружаем карту OpenStreetMap
@@ -98,30 +86,18 @@
 
         let userCoords = { lat: 55.7558, lng: 37.6173 };
 
-        // Запрашиваем реальный GPS смартфона
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition((position) => {
-                userCoords = {
-                    lat: position.coords.latitude,
-                    lng: position.coords.longitude
-                };
+                userCoords = { lat: position.coords.latitude, lng: position.coords.longitude };
                 map.setView([userCoords.lat, userCoords.lng], 16);
-                L.marker([userCoords.lat, userCoords.lng]).addTo(map)
-                    .bindPopup('Вы здесь 📍').openPopup();
+                L.marker([userCoords.lat, userCoords.lng]).addTo(map).bindPopup('Вы здесь 📍').openPopup();
             }, (error) => {
-                L.marker([userCoords.lat, userCoords.lng]).addTo(map)
-                    .bindPopup('GPS отключен').openPopup();
+                L.marker([userCoords.lat, userCoords.lng]).addTo(map).bindPopup('GPS недоступен').openPopup();
             }, { enableHighAccuracy: true });
         }
 
-        // Функция отправки чекина в бот при нажатии кнопки
         function sendCheckin(drinkType) {
-            const data = {
-                drink: drinkType,
-                lat: userCoords.lat,
-                lng: userCoords.lng
-            };
-            
+            const data = { drink: drinkType, lat: userCoords.lat, lng: userCoords.lng };
             if (tg && tg.sendData) {
                 tg.sendData(JSON.stringify(data));
                 tg.close();
@@ -130,7 +106,6 @@
             }
         }
 
-        // Корректировка размеров под экран смартфона
         setTimeout(() => { map.invalidateSize(); }, 400);
     </script>
 </body>
