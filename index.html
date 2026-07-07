@@ -5,7 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Drinderr WebApp</title>
     
-    <!-- Telegram SDK встроен прямо в мессенджер -->
+    <!-- Подключаем официальный скрипт API Яндекс Карт (загружается мгновенно) -->
+    <script src="https://yandex.ru" type="text/javascript"></script>
+    <!-- Telegram WebApp SDK -->
     <script src="https://telegram.org"></script>
     
     <style>
@@ -22,21 +24,11 @@
             overflow: hidden;
         }
         
-        /* Контейнер для статической карты */
-        #map-container {
+        /* Контейнер для полноценной интерактивной карты */
+        #map {
             width: 100%;
             height: calc(100vh - 80px);
-            display: flex;
-            align-items: center;
-            justify-content: center;
             background-color: #2b2b2b;
-            overflow: hidden;
-        }
-
-        #static-map {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
         }
         
         .controls {
@@ -75,17 +67,15 @@
 </head>
 <body>
 
-    <!-- Карта в виде статической картинки Яндекс, которая никогда не заблокируется -->
-    <div id="map-container">
-        <img id="static-map" src="https://yandex.ru" alt="Карта">
-    </div>
+    <!-- Элемент, куда Яндекс загрузит интерактивную карту -->
+    <div id="map"></div>
 
     <div class="controls">
         <button class="beer" onclick="sendCheckin('Пиво 🍻')">🍻 Пиво</button>
         <button class="coffee" onclick="sendCheckin('Кофе ☕')">☕ Кофе</button>
     </div>
 
-    <script>
+    <script type="text/javascript">
         // Инициализируем Telegram WebApp
         let tg = null;
         if (typeof window !== 'undefined' && window.Telegram && window.Telegram.WebApp) {
@@ -94,30 +84,55 @@
             tg.expand();
         }
 
-        // Координаты по умолчанию (Москва)
-        let userCoords = { lat: 55.7558, lng: 37.6173 };
+        // Координаты центра карты по умолчанию (Москва)
+        let userCoords = [55.7558, 37.6173];
+        let myMap = null;
+        let myPlacemark = null;
 
-        // Запрашиваем реальный GPS смартфона
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition((position) => {
-                userCoords = {
-                    lat: position.coords.latitude,
-                    lng: position.coords.longitude
-                };
-                
-                // Переключаем Яндекс Карту на реальные координаты пользователя и ставим маркер (pm2blm)
-                document.getElementById('static-map').src = `https://yandex.ru{userCoords.lng},${userCoords.lat}&z=15&l=map&size=450,450&pt=${userCoords.lng},${userCoords.lat},pm2blm`;
-            }, (error) => {
-                console.log("GPS недоступен, осталась дефолтная карта");
-            }, { enableHighAccuracy: true });
+        // Ждем загрузки API Яндекс Карт
+        ymaps.ready(init);
+
+        function init() {
+            // Создаем полноценную карту Яндекса
+            myMap = new ymaps.Map("map", {
+                center: userCoords,
+                zoom: 13,
+                controls: ['zoomControl', 'geolocationControl']
+            });
+
+            // Пытаемся получить точные координаты через GPS смартфона
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition((position) => {
+                    userCoords = [position.coords.latitude, position.coords.longitude];
+                    
+                    // Центрируем карту на пользователе
+                    myMap.setCenter(userCoords, 15);
+
+                    # Добавляем красивую синюю метку на место, где вы стоите
+                    myPlacemark = new ymaps.Placemark(userCoords, {
+                        hintContent: 'Вы здесь!',
+                        balloonContent: 'Ваше местоположение 📍'
+                    }, {
+                        preset: 'islands#blueBeerIcon' // Иконка бокала/метки
+                    });
+
+                    myMap.geoObjects.add(myPlacemark);
+                }, (error) => {
+                    // Если GPS выключен — ставим стандартную метку в центре
+                    myPlacemark = new ymaps.Placemark(userCoords, {
+                        balloonContent: 'GPS отключен. Дефолтная точка.'
+                    });
+                    myMap.geoObjects.add(myPlacemark);
+                }, { enableHighAccuracy: true });
+            }
         }
 
-        // Функция отправки чекина в бот
+        // Функция отправки чекина обратно в чат вашего бота
         function sendCheckin(drinkType) {
             const data = {
                 drink: drinkType,
-                lat: userCoords.lat,
-                lng: userCoords.lng
+                lat: userCoords[0],
+                lng: userCoords[1]
             };
             
             if (tg && tg.sendData) {
