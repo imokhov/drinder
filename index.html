@@ -5,10 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Drinderr Global Radar</title>
     
-    <!-- Стили карты Leaflet -->
     <link rel="stylesheet" href="leaflet.css" />
-    
-    <!-- Скрипт Telegram SDK -->
     <script src="telegram.js"></script>
     
     <style>
@@ -21,16 +18,9 @@
         #map { width: 100%; height: calc(100vh - 120px); background-color: #2b2b2b; }
         .leaflet-control-attribution { display: none !important; }
         
-        /* ЖЕСТКИЙ ФИКС ДВОЙНЫХ ПИНОВ: Скрываем стандартные картинки-капли Leaflet из кэша */
-        .leaflet-marker-icon:not(.custom-div-icon) { display: none !important; }
+        /* Фикс: Убираем любые дефолтные подложки маркеров Leaflet */
+        .leaflet-marker-icon { background: none !important; border: none !important; }
         .leaflet-marker-shadow { display: none !important; }
-        
-        /* Стили для наших текстовых эмодзи-маркеров */
-        .custom-div-icon {
-            display: block !important;
-            background: none !important;
-            border: none !important;
-        }
 
         .controls {
             height: 120px; padding: 12px 15px; display: flex;
@@ -74,7 +64,6 @@
         </div>
     </div>
 
-    <!-- Загружаем движок карты строго после элементов разметки -->
     <script src="leaflet.js"></script>
     <script>
         let tg = null;
@@ -88,41 +77,38 @@
             }
         }
 
-        // Базовый центр карты — Санкт-Петербург, лицей №239 [59.9451, 30.3541]
+        // Центр по умолчанию — СПб, лицей №239
         let map = L.map('map').setView([59.9451, 30.3541], 15);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
 
         let userCoords = { lat: 59.9451, lng: 30.3541 };
+        let myMarker = null;
 
-        // Наш единственный чистый эмодзи-маркер
+        // Создаем чистый текстовый маркер через L.divIcon
         const myIcon = L.divIcon({
-            html: '<div style="font-size: 30px; transform: translate(-10px, -20px);">📍</div>',
+            html: '<div style="font-size: 32px; transform: translate(-10px, -20px);">📍</div>',
             className: 'custom-div-icon'
         });
 
-        // Запрашиваем реальный GPS смартфона
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition((position) => {
                 userCoords = { lat: position.coords.latitude, lng: position.coords.longitude };
-                
-                // Плавно перемещаем карту к вашей живой точке в Ольгино
                 map.setView([userCoords.lat, userCoords.lng], 16);
                 
-                // Ставим маркер вашей реальной позиции
-                L.marker([userCoords.lat, userCoords.lng], { icon: myIcon }).addTo(map)
+                // Добавляем маркер на карту с явным указанием нашего класса
+                myMarker = L.marker([userCoords.lat, userCoords.lng], { icon: myIcon }).addTo(map)
                     .bindPopup('Вы здесь 📍').openPopup();
             }, (error) => {
-                L.marker([userCoords.lat, userCoords.lng], { icon: myIcon }).addTo(map)
-                    .bindPopup('Лицей №239 (GPS недоступен)').openPopup();
+                myMarker = L.marker([userCoords.lat, userCoords.lng], { icon: myIcon }).addTo(map)
+                    .bindPopup('GPS недоступен').openPopup();
             }, { enableHighAccuracy: true });
         }
 
-        // Рендеринг активных пинов других участников
+        // Рендеринг пинов остальных участников
         if (tg && tg.initDataUnsafe && tg.initDataUnsafe.start_param) {
             try {
                 let allPins = JSON.parse(atob(tg.initDataUnsafe.start_param.replace(/-/g, '+').replace(/_/g, '/')));
                 allPins.forEach(p => {
-                    // Рисуем маркеры только для чужих аккаунтов (убираем дублирование)
                     if (p.name !== currentUserName) {
                         let userIcon = L.divIcon({
                             html: `<div style="font-size: 30px; transform: translate(-10px, -20px);">👤</div>`,
@@ -132,10 +118,9 @@
                             .bindPopup(`<b>Пользователь:</b> ${p.name}<br><b>Исчезнет в:</b> ${p.until}`);
                     }
                 });
-            } catch(e) { console.log("Ошибка парсинга пинов", e); }
+            } catch(e) { console.log("Ошибка парсинга", e); }
         }
 
-        // Функция отправки пина
         window.dropPin = function() {
             const minutes = document.getElementById('duration').value;
             const data = {
@@ -149,11 +134,10 @@
                 tg.sendData(JSON.stringify(data));
                 tg.close();
             } else {
-                alert("Локальный тест:\nПин зафиксирован по GPS: " + userCoords.lat + ", " + userCoords.lng);
+                alert("Тест: " + JSON.stringify(data));
             }
         };
 
-        // Функция удаления пина
         window.deletePin = function() {
             const data = { action: "delete_pin" };
             if (tg && tg.sendData) {
