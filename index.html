@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Beer Buddy WebApp</title>
+    
+    <!-- Стили карты Leaflet -->
+    <link rel="stylesheet" href="https://unpkg.com" />
+    
+    <!-- Telegram WebApp SDK -->
+    <script src="https://telegram.org"></script>
+    
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            width: 100%;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--tg-theme-bg-color, #17212b);
+            color: var(--tg-theme-text-color, #f5f5f5);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        /* ИСПРАВЛЕНО: Явные параметры высоты и отображения для контейнера карты */
+        #map {
+            width: 100%;
+            height: calc(100vh - 80px); /* Карта занимает весь экран кроме нижней панели */
+            background-color: #e5e3df; /* Серый фон-заглушка, пока карта грузится */
+        }
+        
+        .controls {
+            height: 80px;
+            padding: 15px;
+            display: flex;
+            gap: 12px;
+            background: var(--tg-theme-secondary-bg-color, #202b36);
+            box-shadow: 0 -4px 15px rgba(0,0,0,0.3);
+            box-sizing: border-box;
+            z-index: 1000; /* Чтобы панель была поверх карты */
+        }
+        
+        button {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.1s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        
+        button:active {
+            transform: scale(0.97);
+        }
+
+        button.beer { 
+            background: linear-gradient(135deg, #ffb703, #fb8500); 
+            color: #000000; 
+        }
+        button.coffee { 
+            background: linear-gradient(135deg, #219ebc, #023047); 
+            color: #ffffff; 
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Контейнер для карты -->
+    <div id="map"></div>
+
+    <!-- Кнопки внизу -->
+    <div class="controls">
+        <button class="beer" onclick="sendCheckin('Пиво 🍻')">🍻 Пиво</button>
+        <button class="coffee" onclick="sendCheckin('Кофе ☕')">☕ Кофе</button>
+    </div>
+
+    <!-- Логика карты -->
+    <script src="https://unpkg.com"></script>
+    <script>
+        // Инициализация Telegram WebApp
+        const tg = window.Telegram.WebApp;
+        if (tg) {
+            tg.ready();
+            tg.expand();
+        }
+
+        // Создаем карту (центр по умолчанию — Москва)
+        const map = L.map('map').setView([55.7558, 37.6173], 13);
+        
+        // Подгружаем стандартные незатемненные слои карты
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap'
+        }).addTo(map);
+
+        let userCoords = null;
+
+        // Запрашиваем геопозицию
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition((position) => {
+                userCoords = {
+                    lat: position.coords.latitude,
+                    lng: position.coords.longitude
+                };
+                map.setView([userCoords.lat, userCoords.lng], 16);
+                L.marker([userCoords.lat, userCoords.lng]).addTo(map)
+                    .bindPopup('Вы здесь 📍').openPopup();
+            }, (error) => {
+                console.log("Определение геолокации недоступно: ", error.message);
+            }, {
+                enableHighAccuracy: true
+            });
+        }
+
+        function sendCheckin(drinkType) {
+            const data = {
+                drink: drinkType,
+                lat: userCoords ? userCoords.lat : null,
+                lng: userCoords ? userCoords.lng : null
+            };
+            
+            if (tg && tg.sendData) {
+                tg.sendData(JSON.stringify(data));
+                tg.close();
+            } else {
+                // Если открыли просто в браузере на ПК — выведем инфо в алерт
+                alert("Чекин: " + drinkType + "\nКоординаты: " + JSON.stringify(userCoords));
+            }
+        }
+
+        // Исправление бага с обновлением размера карты в контейнере
+        setTimeout(() => { map.invalidateSize(); }, 300);
+    </script>
+</body>
+</html>
