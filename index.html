@@ -3,9 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Drinderr Debug Radar</title>
+    <title>Drinderr Global Radar</title>
     
+    <!-- Локальные стили карты Leaflet -->
     <link rel="stylesheet" href="leaflet.css" />
+    <!-- Нативный скрипт Telegram SDK -->
     <script src="telegram.js"></script>
     
     <style>
@@ -15,35 +17,42 @@
             background-color: #17212b; color: #f5f5f5;
             display: flex; flex-direction: column; overflow: hidden;
         }
-        #map { width: 100%; height: calc(100vh - 160px); background-color: #2b2b2b; }
+        #map { width: 100%; height: calc(100vh - 120px); background-color: #2b2b2b; }
         .leaflet-control-attribution { display: none !important; }
         
-        /* ВРЕМЕННО: Возвращаем вообще все маркеры и стили Leaflet по умолчанию, 
-           чтобы исключить ошибку скрытия */
-        .leaflet-marker-icon, .leaflet-marker-shadow { display: block !important; }
+        /* Жестко стираем дефолтные синие капли Leaflet из памяти WebView */
+        img.leaflet-marker-icon { display: none !important; }
+        .leaflet-marker-shadow { display: none !important; }
+        
+        /* Стили для наших чистых текстовых эмодзи-маркеров */
+        .custom-marker {
+            display: block !important;
+            background: none !important;
+            border: none !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
 
-        /* Панель логов и кнопок */
         .controls {
-            height: 160px; padding: 10px 15px; display: flex;
+            height: 120px; padding: 12px 15px; display: flex;
             flex-direction: column; gap: 8px; background: #202b36;
             box-shadow: 0 -4px 15px rgba(0,0,0,0.3); box-sizing: border-box; z-index: 1000;
         }
-        
-        /* Окно терминала для вывода ошибок */
-        #debug-console {
-            background: #17212b; border: 1px solid #455261;
-            border-radius: 8px; height: 55px; padding: 6px;
-            font-family: monospace; font-size: 11px; color: #4ad66d;
-            overflow-y: auto; white-space: pre-wrap; word-break: break-all;
+        .panel-row { display: flex; gap: 10px; width: 100%; align-items: center; }
+        label { font-size: 14px; color: #b0b9c2; white-space: nowrap; }
+        select {
+            flex: 1; padding: 6px; border-radius: 8px; background: #17212b;
+            color: #fff; border: 1px solid #455261; font-size: 14px; outline: none;
         }
-
         .btn-group { display: flex; gap: 10px; width: 100%; }
         button {
-            flex: 1; padding: 12px; border: none; border-radius: 10px;
-            font-size: 14px; font-weight: bold; cursor: pointer; color: #ffffff;
+            flex: 1; padding: 10px; border: none; border-radius: 10px;
+            font-size: 14px; font-weight: bold; cursor: pointer;
+            transition: transform 0.1s; display: flex; align-items: center; justify-content: center; gap: 6px;
         }
-        button.pin-btn { background: #2481cc; }
-        button.del-btn { background: #e63946; }
+        button:active { transform: scale(0.98); }
+        button.pin-btn { background: linear-gradient(135deg, #2481cc, #1a65a4); color: #ffffff; }
+        button.del-btn { background: linear-gradient(135deg, #e63946, #b21f2d); color: #ffffff; }
     </style>
 </head>
 <body>
@@ -51,107 +60,105 @@
     <div id="map"></div>
 
     <div class="controls">
-        <!-- Экран отладки для смартфона -->
-        <div id="debug-console">Инициализация логгера...</div>
-        
+        <div class="panel-row">
+            <label for="duration">Время жизни пина:</label>
+            <select id="duration">
+                <option value="60">1 час</option>
+                <option value="180">3 часа</option>
+                <option value="720">12 часов</option>
+                <option value="1440">24 часа</option>
+            </select>
+        </div>
         <div class="btn-group">
-            <button class="pin-btn" onclick="dropPinDebug()">📍 ПОСТАВИТЬ</button>
-            <button class="del-btn" onclick="deletePinDebug()">🗑️ УДАЛИТЬ</button>
+            <button class="pin-btn" onclick="dropPin()">📍 Поставить пин</button>
+            <button class="del-btn" onclick="deletePin()">🗑️ Удалить пин</button>
         </div>
     </div>
 
+    <!-- Загружаем локальный движок Leaflet -->
     <script src="leaflet.js"></script>
     <script>
-        const consoleEl = document.getElementById('debug-console');
-        
-        // Функция для вывода текста на экран телефона
-        function log(msg) {
-            consoleEl.innerText = `[${new Date().toLocaleTimeString()}] ${msg}\n` + consoleEl.innerText;
-            console.log(msg);
-        }
-
-        log("Логгер готов. Проверяю Telegram SDK...");
-
         let tg = null;
+        let currentUserName = "Пользователь";
+
         if (typeof window !== 'undefined' && window.Telegram && window.Telegram.WebApp) {
             tg = window.Telegram.WebApp;
             tg.ready(); tg.expand();
-            log(`TG OK. User: ${tg.initDataUnsafe?.user?.first_name || 'Не найден'}`);
-        } else {
-            log("TG SDK не обнаружен!");
+            if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
+                currentUserName = tg.initDataUnsafe.user.first_name || tg.initDataUnsafe.user.username;
+            }
         }
 
-        // Старт на Лицее 239
-        let map;
-        try {
-            map = L.map('map').setView([59.9451, 30.3541], 15);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
-            log("Карта Leaflet инициализирована успешно.");
-        } catch(err) {
-            log(`КРИТИЧЕСКАЯ ОШИБКА КАРТЫ: ${err.message}`);
-        }
+        // Точка старта по дефолту — СПб, лицей №239 [59.9451, 30.3541]
+        let map = L.map('map', { markerZoomAnimation: false }).setView([59.9451, 30.3541], 15);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
 
         let userCoords = { lat: 59.9451, lng: 30.3541 };
 
-        log("Запрашиваю геопозицию GPS...");
+        const myIcon = L.divIcon({
+            html: '<div style="font-size: 32px; transform: translate(-12px, -24px);">📍</div>',
+            className: 'custom-marker'
+        });
+
+        // Запрашиваем GPS без жесткого требования HighAccuracy (чтобы поймать LBS в помещении мгновенно)
         if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    userCoords = { lat: position.coords.latitude, lng: position.coords.longitude };
-                    log(`GPS НАЙДЕН: ${userCoords.lat.toFixed(4)}, ${userCoords.lng.toFixed(4)}`);
-                    map.setView([userCoords.lat, userCoords.lng], 16);
-                    L.marker([userCoords.lat, userCoords.lng]).addTo(map).bindPopup('Вы здесь').openPopup();
-                },
-                (error) => {
-                    log(`ОШИБКА GPS: Код ${error.code} - ${error.message}`);
-                },
-                { enableHighAccuracy: true, timeout: 10000 }
-            );
-        } else {
-            log("Браузер вообще не поддерживает navigator.geolocation");
+            navigator.geolocation.getCurrentPosition((position) => {
+                userCoords = { lat: position.coords.latitude, lng: position.coords.longitude };
+                map.setView([userCoords.lat, userCoords.lng], 16);
+                
+                L.marker([userCoords.lat, userCoords.lng], { icon: myIcon }).addTo(map)
+                    .bindPopup('Вы здесь 📍').openPopup();
+            }, (error) => {
+                // Если GPS долго думает, маркер останется на дефолтной точке
+                L.marker([userCoords.lat, userCoords.lng], { icon: myIcon }).addTo(map)
+                    .bindPopup('Лицей №239 (Поиск GPS...)').openPopup();
+            }, { enableHighAccuracy: false, timeout: 5000 });
         }
 
-        // Отладочный обработчик кнопки ПОСТАВИТЬ
-        window.dropPinDebug = function() {
-            log("Клик по кнопке ПОСТАВИТЬ зафиксирован!");
-            
+        // Разворачиваем пины остальных участников, присланные бэкендом
+        if (tg && tg.initDataUnsafe && tg.initDataUnsafe.start_param) {
+            try {
+                let allPins = JSON.parse(atob(tg.initDataUnsafe.start_param.replace(/-/g, '+').replace(/_/g, '/')));
+                allPins.forEach(p => {
+                    if (p.name !== currentUserName) {
+                        let userIcon = L.divIcon({
+                            html: `<div style="font-size: 30px; transform: translate(-10px, -20px);">👤</div>`,
+                            className: 'custom-marker'
+                        });
+                        L.marker([p.lat, p.lng], { icon: userIcon }).addTo(map)
+                            .bindPopup(`<b>Пользователь:</b> ${p.name}<br><b>Исчезнет в:</b> ${p.until}`);
+                    }
+                });
+            } catch(e) { console.log("Ошибка парсинга пинов", e); }
+        }
+
+        window.dropPin = function() {
+            const minutes = document.getElementById('duration').value;
             const data = {
                 action: "set_pin",
                 lat: userCoords.lat,
                 lng: userCoords.lng,
-                duration: 60
+                duration: parseInt(minutes)
             };
-            
-            const jsonStr = JSON.stringify(data);
-            log(`Пакет готов: ${jsonStr}`);
 
             if (tg && tg.sendData) {
-                log("Вызываю метод tg.sendData()...");
-                try {
-                    tg.sendData(jsonStr);
-                    log("tg.sendData отработал без падения скрипта.");
-                } catch(e) {
-                    log(`ОШИБКА ОТПРАВКИ ТГ: ${e.message}`);
-                }
+                tg.sendData(JSON.stringify(data));
+                tg.close();
             } else {
-                log("Ошибка: tg.sendData недоступен (WebApp запущен не в режиме клавиатуры)");
+                alert("Тест на ПК: " + JSON.stringify(data));
             }
         };
 
-        // Отладочный обработчик кнопки УДАЛИТЬ
-        window.deletePinDebug = function() {
-            log("Клик по кнопке УДАЛИТЬ зафиксирован!");
+        window.deletePin = function() {
             const data = { action: "delete_pin" };
-            const jsonStr = JSON.stringify(data);
-
             if (tg && tg.sendData) {
-                log("Вызываю tg.sendData для удаления...");
-                tg.sendData(jsonStr);
+                tg.sendData(JSON.stringify(data));
+                tg.close();
             } else {
-                log("Ошибка: tg.sendData недоступен!");
+                alert("Запрос на удаление отправлен");
             }
         };
-
+        
         setTimeout(() => { map.invalidateSize(); }, 400);
     </script>
 </body>
