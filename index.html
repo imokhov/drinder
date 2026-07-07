@@ -18,8 +18,8 @@
         #map { width: 100%; height: calc(100vh - 120px); background-color: #2b2b2b; }
         .leaflet-control-attribution { display: none !important; }
         
-        /* Стираем дефолтную графику Leaflet, чтобы убрать второй маркер-каплю */
-        .leaflet-marker-icon, .leaflet-marker-shadow { display: none !important; }
+        /* ЖЕСТКИЙ СБРОС СТИЛЕЙ КЭША: Намертво стираем любые картинки стандартных маркеров Leaflet */
+        .leaflet-marker-icon, .leaflet-marker-shadow { display: none !important; background: none !important; border: none !important; }
         .custom-marker { display: block !important; background: none !important; border: none !important; }
 
         .controls {
@@ -77,13 +77,12 @@
             }
         }
 
-        // Центр — СПб, Лицей №239 по умолчанию
-        let map = L.map('map').setView([59.9451, 30.3541], 15);
+        // ИСПРАВЛЕНО: markerZoomAnimation: false намертво запрещает кэшу телефона отрисовывать старую синюю каплю при зуме
+        let map = L.map('map', { markerZoomAnimation: false }).setView([59.9451, 30.3541], 15);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
 
         let userCoords = { lat: 59.9451, lng: 30.3541 };
 
-        // Кастомный маркер-текст
         const myIcon = L.divIcon({
             html: '<div style="font-size: 32px; transform: translate(-10px, -20px);">📍</div>',
             className: 'custom-marker'
@@ -102,7 +101,6 @@
             }, { enableHighAccuracy: true });
         }
 
-        // Отображение пинов остальных участников
         if (tg && tg.initDataUnsafe && tg.initDataUnsafe.start_param) {
             try {
                 let allPins = JSON.parse(atob(tg.initDataUnsafe.start_param.replace(/-/g, '+').replace(/_/g, '/')));
